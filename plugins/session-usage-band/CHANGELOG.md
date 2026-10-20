@@ -5,6 +5,11 @@ Every notable change to session-usage-band. The format follows
 follow [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor
 version may change how the band reads.
 
+## [0.14.0-dz.2] - 2026-10-20
+
+### Changed
+- Readability on the chips' grounds: the 5h and 7d resets and the project's branch move from the grey label ink (about 5:1) to each chip's main ink (about 10:1 to 12:1); only the `|` between two facts stays grey. One `pair` helper draws every `first|second` on the row.
+
 ## [0.14.0-dz.1] - 2026-10-20
 
 Fork release (danielzangene), on top of upstream 0.14.0.

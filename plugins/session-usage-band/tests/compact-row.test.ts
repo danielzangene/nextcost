@@ -4,6 +4,7 @@
 
 import { test, expect } from 'claude-code/testing'
 import { makeKit } from '../hooks/kit'
+import { DARK } from '../hooks/palette'
 import { readingsOf } from '../hooks/reading'
 import type { BandSnapshot } from '../hooks/snapshot'
 import { chipsView } from '../hooks/views/chips'
@@ -45,6 +46,15 @@ test('the cut chip keeps the whole row inside its columns', () => {
     const row = rowOf(columns)
     // The text and the column of air between pills.
     expect(shown(row).length + pillKeys(row).length).toBeLessThanOrEqual(columns)
+  }
+})
+
+test('every fact on a pill is in its main ink; only the | is grey', () => {
+  const row = rowOf(200)
+  for (const [key, main] of [['5h', DARK.fiveFg], ['7d', DARK.weekFg], ['ws', DARK.value]] as const) {
+    const chip = byKey(row, key, 'Box')
+    expect([byKey(chip, 'a', 'Text')?.props?.color, byKey(chip, 'b', 'Text')?.props?.color]).toEqual([main, main])
+    expect(byKey(chip, 'rule', 'Text')?.props?.color).toBe(DARK.label)
   }
 })
 

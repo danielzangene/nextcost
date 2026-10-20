@@ -4,7 +4,7 @@
 // draw from the readings' words; only the context's pill and hover read
 // raw facts (`read.chips.raw`).
 
-import type { RenderElement } from 'claude-code'
+import type { RenderChildren, RenderElement } from 'claude-code'
 import { fmtTokens, fmtWholeCost, HOUR_MS, DAY_MS, severityMark } from '../format'
 import type { Icon } from '../icons'
 import type { Kit } from '../kit'
@@ -101,6 +101,33 @@ export const cachePill = (kit: Kit, read: Readings, short: boolean, bold = false
   }
 }
 
+// ---- inks -------------------------------------------------------------------
+
+/** The `|` between two facts on a pill. */
+const RULE = '|'
+
+/** Two facts as `first|second`: both in the pill's main ink, which holds about
+ *  10:1 on its ground, and only the rule in label ink, so nothing a reader
+ *  needs sits in the dimmer grey. `second` undefined draws `first` alone. */
+const pair = (kit: Kit, ink: Readonly<{ main: string; rule: string }>, first: string, second: string | undefined, boldFirst = false): RenderChildren[] => {
+  const { Text } = kit
+  return [
+    <Text key="a" color={ink.main} {...(boldFirst ? { bold: true } : {})}>
+      {first}
+    </Text>,
+    ...(second === undefined
+      ? []
+      : [
+          <Text key="rule" color={ink.rule}>
+            {RULE}
+          </Text>,
+          <Text key="b" color={ink.main}>
+            {second}
+          </Text>,
+        ]),
+  ]
+}
+
 /** The session's cost; its card names the last message's. */
 const costPill = (kit: Kit, read: Readings): PillSpec => {
   const { Text, palette, icon } = kit
@@ -181,7 +208,7 @@ export const limitPill = (kit: Kit, read: Readings, key: ChipKey, squeeze: numbe
       hover: limitHover(read, key),
     }
   }
-  const fg = onTone(tone, tint.fg)
+  const ink = { main: onTone(tone, tint.fg), rule: onTone(tone, palette.label) }
   const showReset = resetInMs !== undefined && keeps(squeeze, tone === 'amber' ? spec.amberReset : spec.reset)
   return {
     key,
@@ -189,10 +216,7 @@ export const limitPill = (kit: Kit, read: Readings, key: ChipKey, squeeze: numbe
     bg: tint.bg,
     body: [
       ...lead(onTone(tone, tint.accent)),
-      <Text key="v" color={fg} bold>
-        {`${w.value}${severityMark(frac)}`}
-      </Text>,
-      showReset ? <Text key="r" color={onTone(tone, palette.label)}>{`|${resetDecimal(key, resetInMs)}`}</Text> : null,
+      ...pair(kit, ink, `${w.value}${severityMark(frac)}`, showReset ? resetDecimal(key, resetInMs) : undefined, true),
     ],
     hover: limitHover(read, key),
   }
@@ -212,20 +236,24 @@ const workspacePill = (kit: Kit, read: Readings, room: number): PillSpec | undef
   const git = ws.git
   const name = splitPath(ws.path).name
   const head = git === undefined ? undefined : (git.branch ?? git.commit ?? 'detached')
-  const full = [...(head === undefined ? name : `${name}|${head}`)]
+  const nameLength = [...name].length
+  const full = [...(head === undefined ? name : `${name}${RULE}${head}`)]
+  const ink = { main: palette.value, rule: palette.label }
+  /** The pill for `text`, the whole or a cut of `full`: the folder, then the
+   *  rule and the branch where the cut reaches them. */
   const spec = (text: readonly string[]): PillSpec => {
-    // The folder in value ink, the branch after it in label ink.
-    const cut = Math.min(text.length, [...name].length)
+    const folder = text.slice(0, nameLength).join('')
+    const rest = text.slice(nameLength)
+    const body =
+      rest.length === 0
+        ? pair(kit, ink, folder, undefined)
+        : rest[0] === RULE
+          ? pair(kit, ink, folder, rest.slice(1).join(''))
+          : pair(kit, ink, folder + rest.join(''), undefined)
     return {
       key: 'ws',
       tone: 'calm',
-      body: [
-        ...(Svg ? icon('branch', palette.label) : [<Text key="i" color={palette.label}>{'⎇ '}</Text>]),
-        <Text key="n" color={palette.value}>
-          {text.slice(0, cut).join('')}
-        </Text>,
-        cut === text.length ? null : <Text key="b" color={palette.label}>{text.slice(cut).join('')}</Text>,
-      ],
+      body: [...(Svg ? icon('branch', palette.label) : [<Text key="i" color={palette.label}>{'⎇ '}</Text>]), ...body],
       hover: git === undefined ? ws.path : `${ws.path}: ${gitSummary(git)}`,
     }
   }
