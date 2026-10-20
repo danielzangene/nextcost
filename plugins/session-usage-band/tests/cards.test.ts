@@ -14,7 +14,7 @@ import { cardsView } from '../hooks/views/cards'
 import type { View } from '../hooks/views/view'
 import { canon } from './golden/hash'
 import { BARE, DARK, PLAIN } from '../hooks/palette'
-import { boldOf, byKey, cardFirstRow, cardHead, cardOf, fact, fakeEl, shown, walk, type Node } from './helpers'
+import { boldOf, byKey, cardFirstRow, cardHead, cardOf, fact, fakeEl, isBandMargin, shown, walk, type Node } from './helpers'
 import { NO_ACT, snapOf, visualRows } from './matrix'
 
 const text = (s: string) => ({ type: 'Text', props: {}, children: [s] }) as unknown as RenderElement
@@ -33,7 +33,10 @@ test("chips' open view is openBody's, with one collapsed row and nothing to skip
     const snap = snapOf({ expanded: true, surface })
     const kit = makeKit(fakeEl, snap)
     const read = readingsOf(snap)
-    const drawn = (chipsView.draw(kit, read, NO_ACT) as unknown as Node).children?.flat().slice(1)
+    const drawn = (chipsView.draw(kit, read, NO_ACT) as unknown as Node).children
+      ?.flat()
+      .filter(k => !isBandMargin(k))
+      .slice(1)
     expect(canon(drawn)).toEqual(canon(openBody(kit, read, NO_ACT, { collapsedRows: 1 }).filter(Boolean)))
   }
 })

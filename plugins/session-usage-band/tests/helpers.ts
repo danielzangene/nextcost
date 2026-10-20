@@ -352,7 +352,7 @@ export const byKey = (tree: unknown, key: string, type?: string): Node | undefin
 /** Rows of the band: the root Box's children. */
 export const rowCount = (tree: unknown): number => {
   const t = tree as Node
-  return t.type === 'Box' ? (t.children ?? []).length : 0
+  return t.type === 'Box' ? (t.children ?? []).filter(k => !isBandMargin(k)).length : 0
 }
 
 /** Cells a drawn row needs, as the terminal lays it out: text, padding, gaps
@@ -374,7 +374,12 @@ export const widthOf = (n: unknown): number => {
 }
 
 /** The band's first row: the pills. */
-export const firstRow = (tree: unknown): unknown => ((tree as Node).children ?? [])[0]
+/** Whether a child of the band is the desktop's pixel margin above or below
+ *  it: the band's only top-level Svg. */
+export const isBandMargin = (k: unknown): boolean => (k as Node | null)?.type === 'Svg'
+
+/** The band's first row, past the desktop's pixel margin above it. */
+export const firstRow = (tree: unknown): unknown => ((tree as Node).children ?? []).find(k => !isBandMargin(k))
 
 // ── constants ──────────────────────────────────────────────────────────
 

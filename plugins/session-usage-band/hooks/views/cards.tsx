@@ -325,8 +325,24 @@ export const cardsView = (kit: Kit, read: Readings, act: BandActions, lines: rea
   const { Box } = kit
   return (
     <Box flexDirection="column">
+      {bandMargin(kit, 'margin-top', 'usage band')}
       {lines}
       {read.frame.expanded ? openBody(kit, read, act, o) : null}
+      {bandMargin(kit, 'margin-bottom', 'end of usage band')}
     </Box>
   )
+}
+
+/** The band's air above and below, in CSS pixels. */
+export const BAND_MARGIN_PX = 3
+
+/** An empty drawing `BAND_MARGIN_PX` tall, keyed `margin-…`: the desktop's
+ *  one way to space by the pixel, as a Box's margins count whole rows. Every
+ *  Svg needs an alt, so each edge names where the band starts or ends. A text
+ *  surface has no pixels and a row would be far more, so it draws none. */
+const bandMargin = (kit: Kit, key: string, alt: string): RenderChildren[] => {
+  const { Svg } = kit
+  if (!Svg) return []
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="${BAND_MARGIN_PX}" viewBox="0 0 1 ${BAND_MARGIN_PX}"/>`
+  return [<Svg key={key} source={source} alt={alt} width={1} height={BAND_MARGIN_PX} />]
 }

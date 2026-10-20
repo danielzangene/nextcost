@@ -23,6 +23,7 @@ import {
   cardText,
   fakeEl,
   hoverCardOf,
+  isBandMargin,
   isCard,
   shown,
   svgsOf,
@@ -60,7 +61,7 @@ test('the strip opens the expanded view: the project, home as ~, its name bold, 
   const clock = setup(on, { env: HOME })
   await $.session.start({ ...START, surface: 'desktop' })
   const tree = await expanded($, clock, 'desktop')
-  const kids = ((tree as Node).children ?? []).filter(Boolean) as Node[]
+  const kids = ((tree as Node).children ?? []).filter(k => Boolean(k) && !isBandMargin(k)) as Node[]
   expect(kids.map(k => k.props?.key)).toEqual(['row', 'strip', 'cards', 'actions'])
   const strip = stripOf(tree)
   expect(shown(strip)).toMatch(/^~\/workspace\/claude-mod.*main.*clean$/)

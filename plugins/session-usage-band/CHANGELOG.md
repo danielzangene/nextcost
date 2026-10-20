@@ -9,6 +9,7 @@ version may change how the band reads.
 
 ### Changed
 - Readability on the chips' grounds: the 5h and 7d resets and the project's branch move from the grey label ink (about 5:1) to each chip's main ink (about 10:1 to 12:1); only the `|` between two facts stays grey. One `pair` helper draws every `first|second` on the row.
+- On the desktop the band has 3px of air above and below it, drawn as a 3px spacer since a Box's margins count whole rows; a terminal, which has no pixels, is unchanged.
 
 ## [0.14.0-dz.1] - 2026-10-20
 

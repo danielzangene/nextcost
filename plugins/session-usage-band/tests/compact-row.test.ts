@@ -58,6 +58,18 @@ test('every fact on a pill is in its main ink; only the | is grey', () => {
   }
 })
 
+test('on the desktop the band has 3px of air above and below; a terminal has none', () => {
+  const bandOf = (surface: 'desktop' | 'terminal') => {
+    const snap = snapOf({ columns: 200, surface })
+    return chipsView.draw(makeKit(fakeEl, snap), readingsOf(snap), NO_ACT) as Node
+  }
+  const desktop = bandOf('desktop').children as Node[]
+  for (const edge of [desktop[0], desktop.at(-1)]) {
+    expect([edge?.type, edge?.props?.height]).toEqual(['Svg', 3])
+  }
+  expect((bandOf('terminal').children as Array<Node | null>).filter(k => k?.type === 'Svg')).toEqual([])
+})
+
 test('the limits read usage then a decimal reset, the cost whole dollars', () => {
   const row = rowOf(200)
   expect(shown(byKey(row, '5h', 'Box'))).toMatch(/\d+%\|\d+\.\d\dh/)
