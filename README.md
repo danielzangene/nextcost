@@ -1,3 +1,15 @@
+> **Fork note.** This is [danielzangene](https://github.com/danielzangene)'s fork of
+> [HMarzban/claude-mod](https://github.com/HMarzban/claude-mod) at session-usage-band 0.14.0,
+> with a compact one-line chip row, on the `compact-row` branch (see the plugin's [CHANGELOG](plugins/session-usage-band/CHANGELOG.md)).
+> Install this fork with:
+>
+> ```bash
+> claude plugin marketplace add danielzangene/nextcost
+> claude plugin install session-usage-band@danielzangene-mods
+> ```
+>
+> All credit for the band goes to Hossein Marzban; MIT licensed, as upstream.
+
 <div align="center">
 
 # claude-mod

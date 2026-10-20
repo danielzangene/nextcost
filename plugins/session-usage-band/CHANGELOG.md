@@ -5,6 +5,20 @@ Every notable change to session-usage-band. The format follows
 follow [Semantic Versioning](https://semver.org/). Before 1.0.0, a minor
 version may change how the band reads.
 
+## [0.14.0-dz.1] - 2026-10-20
+
+Fork release (danielzangene), on top of upstream 0.14.0.
+
+### Changed
+- The chip row is one compact line: `(battery)60m  $1  (ctx)120k  (5h)6%|4.43h  (7d)66%|0.3d  (branch)project|branch`.
+- Cache: the battery and minutes left, no `cache warm` wording.
+- Cost: whole dollars; the cents stay in the hover and the cards.
+- Context: tokens in use, with no meter.
+- 5h and 7d: no bars or pace words on the row; the reset as decimal hours and days.
+
+### Added
+- A project|branch chip, last on the row, in place of the tokens chip. It takes the room the others leave and is cut with `…` rather than dropped.
+
 ## [0.14.0] - 2026-10-12
 
 ### Removed

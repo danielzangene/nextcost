@@ -1,9 +1,9 @@
 {
-  "name": "hossein-mods",
-  "description": "Claude Code mods: small plugins that draw inside Claude Code.",
+  "name": "danielzangene-mods",
+  "description": "A fork of HMarzban/claude-mod's session-usage-band with a compact one-line chip row.",
   "owner": {
-    "name": "Hossein Marzban",
-    "url": "https://github.com/HMarzban"
+    "name": "Daniel Zangene",
+    "url": "https://github.com/danielzangene"
   },
   "plugins": [
     {
