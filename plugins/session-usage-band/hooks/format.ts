@@ -39,6 +39,9 @@ const wholeDollars = (usd: number): string => String(Math.round(usd)).replace(/\
 
 export const fmtCost = (usd: number): string => (usd >= WHOLE_FROM ? `$${wholeDollars(usd)}` : `$${usd.toFixed(2)}`)
 
+/** Whole dollars only, the cents dropped: $3.19 is `$3`. */
+export const fmtWholeCost = (usd: number): string => `$${wholeDollars(Math.floor(Math.max(0, usd)))}`
+
 /** A small figure honestly: under a cent is not $0.00. */
 export const fmtSmallCost = (usd: number): string => (usd < 0.01 ? '<$0.01' : fmtCost(usd))
 

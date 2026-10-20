@@ -296,26 +296,28 @@ export const cacheCopy = (f: CacheFacts, c: BandSnapshot['cache'], frame: Frame)
   // What a warm read costs against input on the model in force.
   const readPct = `${+(c.readShare * 100).toFixed(1)}%`
   const left = fmtCountdown(c.msLeft)
+  // The row says the cache in minutes alone: `60m`, `47s` in its last minute.
+  const minutes = `${minutesLeft(c.msLeft)}m`
   const battery = f.charge <= 0 ? 'cache battery empty' : `cache battery ${Math.round(clamp01(f.charge) * 100)}% left`
   const warmHover = `${left} left; warm cache bills input at ${readPct}, expires ${c.ttl} after a reply`
   switch (f.mood) {
     case 'unmeasured':
       return {
-        pill: () => 'cache –',
+        pill: () => '–',
         figure: undefined,
         hover: "Not measured since the band loaded; the countdown starts with Claude's next reply",
         alt: 'cache not measured yet',
       }
     case 'warming':
       return {
-        pill: () => 'cache warming',
+        pill: () => '–',
         figure: undefined,
         hover: `Your first message builds the cache; after that it bills input at ${readPct}`,
         alt: 'cache warming',
       }
     case 'expiring':
       return {
-        pill: short => (short ? `${left} ${f.estimate}` : `${left} left · re-warm ${f.estimate}`),
+        pill: () => `${secondsLeft(c.msLeft)}s`,
         figure: undefined,
         hover: warmHover,
         alt: battery,
@@ -323,15 +325,15 @@ export const cacheCopy = (f: CacheFacts, c: BandSnapshot['cache'], frame: Frame)
     case 'cold':
       return {
         // Cold is a price, not an error: neutral, no hue, no alarm.
-        pill: short => (short ? `cold ${f.estimate}` : `cache cold · next message ${f.estimate}`),
+        pill: () => 'cold',
         figure: undefined,
         hover: `Cold: next message rebuilds ${fmtTokens(c.window)} tokens${c.reWarmUsd === null ? '' : ` (${f.estimate})`}`,
         alt: battery,
       }
     case 'warm':
       return {
-        pill: () => (frame.isWorking ? 'cache warm' : `cache ${left}`),
-        figure: frame.isWorking ? undefined : left,
+        pill: () => minutes,
+        figure: minutes,
         hover: warmHover,
         alt: battery,
       }

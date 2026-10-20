@@ -4,19 +4,19 @@
 // draw from the readings' words; only the context's pill and hover read
 // raw facts (`read.chips.raw`).
 
-import type { RenderChildren, RenderElement } from 'claude-code'
-import { meter } from '../charts'
-import { fmtTokens, severityMark } from '../format'
+import type { RenderElement } from 'claude-code'
+import { fmtTokens, fmtWholeCost, HOUR_MS, DAY_MS, severityMark } from '../format'
 import type { Icon } from '../icons'
 import type { Kit } from '../kit'
-import { GIVES_WAY, ROW_SLACK, SHORT_BELOW, cellsOf, keeps, spansOf, squeezeToFit } from '../layout'
+import { GIVES_WAY, ROW_SLACK, cellsOf, keeps, spansOf, squeezeToFit } from '../layout'
 import type { Piece } from '../layout'
 import type { Palette } from '../palette'
 import type { LimitKey, Readings } from '../reading'
 import type { BandActions } from '../snapshot'
 import { cardsView } from './cards'
 import { toggleButton } from './frame'
-import { batteryIcon, cacheHover, pill, resetClause, textBattery } from './parts'
+import { batteryIcon, cacheHover, pill, textBattery } from './parts'
+import { gitSummary, splitPath } from '../workspace'
 import type { PillSpec } from './parts'
 import type { View } from './view'
 
@@ -56,11 +56,7 @@ export const LIMITS: Readonly<Record<ChipKey, LimitSpec>> = {
 
 // ---- the pills --------------------------------------------------------------
 
-/** Whether the row says the cache and context short at `squeeze`: always
- *  below `SHORT_BELOW` columns. */
-const shortAt = (kit: Kit, squeeze: number): boolean => kit.columns < SHORT_BELOW || !keeps(squeeze, 'shortWording')
-
-/** The cache pill: a draining battery and its countdown, or its mood. A
+/** The cache pill: a draining battery and its minutes, or its mood. A
  *  layout that bolds each reading's figure asks for the countdown `bold`;
  *  chips' own draws it plain. */
 export const cachePill = (kit: Kit, read: Readings, short: boolean, bold = false): PillSpec => {
@@ -108,23 +104,13 @@ export const cachePill = (kit: Kit, read: Readings, short: boolean, bold = false
 /** The session's cost; its card names the last message's. */
 const costPill = (kit: Kit, read: Readings): PillSpec => {
   const { Text, palette, icon } = kit
-  const { totalText, lastText } = read.spend
+  const { totalText, totalUsd, lastText } = read.spend
   return {
     key: 'cost',
     tone: 'calm',
-    body: [...icon('cost', palette.coin), <Text key="v" color={palette.value} bold>{totalText}</Text>],
+    // Whole dollars on the row; the cents are in the hover and the cards.
+    body: [...icon('cost', palette.coin), <Text key="v" color={palette.value} bold>{fmtWholeCost(totalUsd)}</Text>],
     hover: lastText === undefined ? `${totalText} so far this session` : `${lastText} spent during your last message, subagents included`,
-  }
-}
-
-/** The session's tokens; its card splits them by kind. */
-const tokensPill = (kit: Kit, read: Readings): PillSpec => {
-  const { Text, palette, icon } = kit
-  return {
-    key: 'tokens',
-    tone: 'calm',
-    body: [...icon('tokens', palette.label), <Text key="v" color={palette.value}>{read.spend.tokensText}</Text>],
-    hover: read.chips.reading.tokenBreakdown,
   }
 }
 
@@ -137,29 +123,20 @@ const contextHover = (read: Readings): string => {
     : `${fmtTokens(read.context.used)} of ${fmtTokens(ctx.compactAt)} (${pct}); auto-compacts in ~${fmtTokens(toCompact)}`
 }
 
-/** The context's fill on a meter, counting down to compaction once near it. */
-const contextPill = (kit: Kit, read: Readings, squeeze: number): PillSpec => {
-  const { Text, palette, onTone, gap, icon } = kit
+/** The context in use as tokens, `120k`, with a mark once near full when
+ *  compaction is off. */
+const contextPill = (kit: Kit, read: Readings): PillSpec => {
+  const { Text, palette, onTone, icon } = kit
   const ctx = read.chips.raw.context
-  const { frac, pct, toCompact, nearCompact, tone } = read.context
-  const amount =
-    ctx.compactAt !== undefined
-      ? keeps(squeeze, 'shortWording')
-        ? `${pct} full`
-        : pct
-      : !keeps(squeeze, 'shortWording') || ctx.tokens === undefined
-        ? pct
-        : `${fmtTokens(ctx.tokens)} / ${fmtTokens(ctx.window)}`
+  const { frac, used, tone } = read.context
   const mark = ctx.compactAt === undefined ? severityMark(frac) : ''
-  const countdown = nearCompact && toCompact !== undefined ? ` · compacts in ~${fmtTokens(toCompact)}` : ''
   return {
     key: 'ctx',
     tone,
     body: [
       ...icon('context', onTone(tone, palette.label)),
-      ...(keeps(squeeze, 'contextMeter') ? [meter(kit, { label: 'context', frac, tone, accent: palette.meterFill }), gap('g-bar')] : []),
       <Text key="v" color={onTone(tone, palette.value)}>
-        {`${amount}${mark}${countdown}`}
+        {`${fmtTokens(used)}${mark}`}
       </Text>,
     ],
     hover: contextHover(read),
@@ -175,70 +152,101 @@ const limitHover = (read: Readings, key: ChipKey): string | undefined => {
   const { title } = LIMITS[key]
   const r = w.reset
   if (r?.kind === 'passed') return `${title} has reset; it updates after your next message`
-  return r === undefined ? `Your ${title.toLowerCase()}, across all your Claude use` : `Resets in ${r.text}; ${title.toLowerCase()}, all your Claude use`
+  const pace = w.pace === '' ? '' : `; ${w.pace}`
+  return r === undefined ? `Your ${title.toLowerCase()}, across all your Claude use` : `Resets in ${r.text}${pace}; ${title.toLowerCase()}, all your Claude use`
 }
 
-/** A limit chip: its usage on a bar and the reset; a pace that fills it
- *  early speaks in words. A window whose reset has passed shows as reset:
- *  its last reading is from before it. Undefined while the engine reports
- *  no such window. A layout's `mark`, such as a trail, takes the bar's place. */
-export const limitPill = (kit: Kit, read: Readings, key: ChipKey, squeeze: number, short: boolean, mark?: RenderChildren): PillSpec | undefined => {
-  const { Text, palette, onTone, gap, icon } = kit
+/** The time to a limit's reset as a decimal: the 5h window in hours,
+ *  `4.43h`, the weekly in days, `0.3d`. */
+const resetDecimal = (key: ChipKey, ms: number): string => (key === '5h' ? `${(ms / HOUR_MS).toFixed(2)}h` : `${(ms / DAY_MS).toFixed(1)}d`)
+
+/** A limit chip: its icon, usage and reset, `6%|4.43h`. A window whose
+ *  reset has passed shows as reset: its last reading is from before it.
+ *  Undefined while the engine reports no such window. */
+export const limitPill = (kit: Kit, read: Readings, key: ChipKey, squeeze: number): PillSpec | undefined => {
+  const { Text, Svg, palette, onTone, icon } = kit
   const w = key === '5h' ? read.fiveHour : read.sevenDay
   if (w === undefined) return undefined
   const spec = LIMITS[key]
+  // The desktop's icon names the window; a text surface has no glyph for it, so says it.
+  const lead = (color: string) => (Svg ? icon(spec.icon, color) : [<Text key="i" color={color}>{`${key} `}</Text>])
   const tint = spec.tint(palette)
-  const { reset: r, frac, tone } = w
+  const { reset: r, frac, tone, resetInMs } = w
   if (r?.kind === 'passed') {
     return {
       key,
       tone: 'calm',
       bg: tint.bg,
-      body: [...icon(spec.icon, tint.accent), <Text key="l" color={tint.fg}>{`${key} reset`}</Text>],
+      body: [...lead(tint.accent), <Text key="l" color={tint.fg}>{'reset'}</Text>],
       hover: limitHover(read, key),
     }
   }
-  const pace = w.fullIn === undefined ? '' : ` ${short ? w.fullIn : w.pace}`
   const fg = onTone(tone, tint.fg)
-  const accent = onTone(tone, tint.accent)
-  const bar = keeps(squeeze, 'limitBars') ? [gap('g-bar'), mark ?? meter(kit, { label: key, frac, tone, accent: tint.accent })] : []
-  // The reset is a qualifier: in label ink, its figure the usage before it.
-  const resetInk = onTone(tone, palette.label)
-  const reset = r !== undefined && keeps(squeeze, tone === 'amber' ? spec.amberReset : spec.reset) ? resetClause(kit, resetInk, r.text) : []
+  const showReset = resetInMs !== undefined && keeps(squeeze, tone === 'amber' ? spec.amberReset : spec.reset)
   return {
     key,
     tone,
     bg: tint.bg,
     body: [
-      ...icon(spec.icon, accent),
-      <Text key="l" color={fg}>
-        {key}
-      </Text>,
-      ...bar,
+      ...lead(onTone(tone, tint.accent)),
       <Text key="v" color={fg} bold>
-        {` ${w.value}${severityMark(frac)}`}
+        {`${w.value}${severityMark(frac)}`}
       </Text>,
-      pace === '' ? null : <Text key="p" color={fg}>{pace}</Text>,
-      ...reset,
+      showReset ? <Text key="r" color={onTone(tone, palette.label)}>{`|${resetDecimal(key, resetInMs)}`}</Text> : null,
     ],
     hover: limitHover(read, key),
   }
 }
 
-/** Chips' pills at a squeeze, in its order, the tokens last: the calm ones
- *  give way by `GIVES_WAY`, the tokens first, and an amber one holds out. */
+/** The fewest characters the project chip shows; with less room it gives way. */
+const WORKSPACE_MIN_CHARS = 4
+
+/** Where the session is: its project folder and git branch,
+ *  `claude-mod|main`, the folder alone outside a repository, cut with `…`
+ *  to fit the `room` cells the other chips leave. Undefined until the
+ *  workspace has been read, or with too little room. */
+const workspacePill = (kit: Kit, read: Readings, room: number): PillSpec | undefined => {
+  const { Text, Svg, palette, icon, measure } = kit
+  const ws = read.workspace
+  if (ws === undefined) return undefined
+  const git = ws.git
+  const name = splitPath(ws.path).name
+  const head = git === undefined ? undefined : (git.branch ?? git.commit ?? 'detached')
+  const full = [...(head === undefined ? name : `${name}|${head}`)]
+  const spec = (text: readonly string[]): PillSpec => {
+    // The folder in value ink, the branch after it in label ink.
+    const cut = Math.min(text.length, [...name].length)
+    return {
+      key: 'ws',
+      tone: 'calm',
+      body: [
+        ...(Svg ? icon('branch', palette.label) : [<Text key="i" color={palette.label}>{'⎇ '}</Text>]),
+        <Text key="n" color={palette.value}>
+          {text.slice(0, cut).join('')}
+        </Text>,
+        cut === text.length ? null : <Text key="b" color={palette.label}>{text.slice(cut).join('')}</Text>,
+      ],
+      hover: git === undefined ? ws.path : `${ws.path}: ${gitSummary(git)}`,
+    }
+  }
+  // A column short, as the desktop's measure is an estimate.
+  const chars = Math.floor((room - 1 - cellsOf(pill(kit, spec([])), measure)) / measure.text)
+  if (chars >= full.length) return spec(full)
+  return chars < WORKSPACE_MIN_CHARS ? undefined : spec([...full.slice(0, chars - 1), '…'])
+}
+
+/** Chips' pills at a squeeze, in its order, but for the project, which
+ *  takes the room left: the calm ones give way by `GIVES_WAY`, and an amber one holds out. */
 export const chipsPills = (kit: Kit, read: Readings, squeeze: number): PillSpec[] => {
-  const short = shortAt(kit, squeeze)
   const calm = (tone: 'calm' | 'amber', piece: Piece) => tone === 'amber' || keeps(squeeze, piece)
-  const five = read.fiveHour && calm(read.fiveHour.tone, LIMITS['5h'].calm) ? limitPill(kit, read, '5h', squeeze, short) : undefined
-  const seven = read.sevenDay && calm(read.sevenDay.tone, LIMITS['7d'].calm) ? limitPill(kit, read, '7d', squeeze, short) : undefined
+  const five = read.fiveHour && calm(read.fiveHour.tone, LIMITS['5h'].calm) ? limitPill(kit, read, '5h', squeeze) : undefined
+  const seven = read.sevenDay && calm(read.sevenDay.tone, LIMITS['7d'].calm) ? limitPill(kit, read, '7d', squeeze) : undefined
   return [
-    cachePill(kit, read, short),
+    cachePill(kit, read, false),
     costPill(kit, read),
-    ...(read.context.known && calm(read.context.tone, 'calmContext') ? [contextPill(kit, read, squeeze)] : []),
+    ...(read.context.known && calm(read.context.tone, 'calmContext') ? [contextPill(kit, read)] : []),
     ...(five === undefined ? [] : [five]),
     ...(seven === undefined ? [] : [seven]),
-    ...(read.cache.measured && keeps(squeeze, 'tokens') ? [tokensPill(kit, read)] : []),
   ]
 }
 
@@ -260,9 +268,24 @@ export const pillRow = (kit: Kit, read: Readings, act: BandActions, specs: reado
   )
 }
 
-/** Chips' one row, squeezed until it fits. */
-const chipsRow = (kit: Kit, read: Readings, act: BandActions): RenderElement =>
-  squeezeToFit(squeeze => pillRow(kit, read, act, chipsPills(kit, read, squeeze)), GIVES_WAY.length, kit.columns - ROW_SLACK, kit.measure)
+/** Chips' one row, squeezed until it fits; the project chip last, in the
+ *  room the others leave. */
+const chipsRow = (kit: Kit, read: Readings, act: BandActions): RenderElement => {
+  const { measure } = kit
+  const room = kit.columns - ROW_SLACK - cellsOf(toggleButton(kit, read, act), measure) - 1
+  return squeezeToFit(
+    squeeze => {
+      const specs = chipsPills(kit, read, squeeze)
+      // Each pill and the column of air after it.
+      const used = specs.reduce((sum, spec) => sum + cellsOf(pill(kit, spec), measure) + 1, 0)
+      const where = workspacePill(kit, read, room - used)
+      return pillRow(kit, read, act, where === undefined ? specs : [...specs, where])
+    },
+    GIVES_WAY.length,
+    kit.columns - ROW_SLACK,
+    measure,
+  )
+}
 
 export const chipsView: View = {
   rows: { desktop: 1, terminal: 1 },
